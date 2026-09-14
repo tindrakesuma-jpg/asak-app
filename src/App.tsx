@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import LoginPage from './features/auth/LoginPage';
-import Dashboard from './features/auth/Dashboard';
+import AnakListPage from './features/anak/AnakListPage';
 import { useUserProfile } from './features/auth/useUserProfile';
 import type { Session } from '@supabase/supabase-js';
 
@@ -27,7 +27,7 @@ function App() {
   if (!session) return <LoginPage />;
   if (profileLoading || !profile) return <p style={{ textAlign: 'center', marginTop: 80 }}>Memuat profil...</p>;
 
-  return <Dashboard name={profile.name} roleName={profile.roleName} />;
+  return <AnakListPage />;
 }
 
 export default App;
