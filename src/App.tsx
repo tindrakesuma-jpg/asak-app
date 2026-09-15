@@ -6,6 +6,8 @@ import { useUserProfile } from './features/auth/useUserProfile';
 import FormBPage from './features/pendaftaran/FormBPage';
 import TinjauFormBPage from './features/pendaftaran/TinjauFormBPage';
 import FormAPage from './features/pendaftaran/FormAPage';
+import AntrianSurveyPage from './features/anak/AntrianSurveyPage';
+import SurveyFormPage from './features/anak/SurveyFormPage';
 import type { Session } from '@supabase/supabase-js';
 
 function App() {
@@ -37,6 +39,7 @@ function App() {
         <div className="flex gap-4">
           <Link to="/form-b" className="text-blue-600">Form B</Link>
           <Link to="/tinjau-form-b" className="text-blue-600">Tinjau Form B</Link>
+          <Link to="/antrian-survey" className="text-blue-600">Antrian Survey</Link>
           <button onClick={() => supabase.auth.signOut()}>Keluar</button>
         </div>
       </nav>
@@ -46,6 +49,8 @@ function App() {
         <Route path="/form-b" element={<FormBPage />} />
         <Route path="/tinjau-form-b" element={<TinjauFormBPage />} />
         <Route path="/form-a/:id" element={<FormAPage />} />
+        <Route path="/antrian-survey" element={<AntrianSurveyPage />} />
+        <Route path="/survey/:id" element={<SurveyFormPage />} />
       </Routes>
     </div>
   );
