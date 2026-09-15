@@ -11,6 +11,8 @@ const ROLES = [
   'SekretarisASAK',
   'SuperAdminASAK',
   'PenyantunASAK',
+  'KetuaLingkungan',
+  'OrangTuaASAK',
 ];
 
 const INTERIM_PASSWORD = 'ASAK2026';
