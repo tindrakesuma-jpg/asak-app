@@ -12,6 +12,8 @@ import type { Session } from '@supabase/supabase-js';
 import RapatKeputusanPage from './features/anak/RapatKeputusanPage';
 import KeputusanDetailPage from './features/anak/KeputusanDetailPage';
 import PicPoolPage from './features/anak/PicPoolPage';
+import DonorRegistrationPage from './features/penyantun/DonorRegistrationPage';
+import PicPenyantunPoolPage from './features/penyantun/PicPenyantunPoolPage';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -45,6 +47,8 @@ function App() {
           <Link to="/antrian-survey" className="text-blue-600">Antrian Survey</Link>
           <Link to="/rapat-keputusan" className="text-blue-600">Rapat Keputusan</Link>
           <Link to="/pic-pool" className="text-blue-600">PIC Anak</Link>
+          <Link to="/daftar-penyantun" className="text-blue-600">Daftar Penyantun</Link>
+          <Link to="/pool-penyantun" className="text-blue-600">Pool Penyantun</Link>
           <button onClick={() => supabase.auth.signOut()}>Keluar</button>
         </div>
       </nav>
@@ -59,6 +63,8 @@ function App() {
         <Route path="/rapat-keputusan" element={<RapatKeputusanPage />} />
         <Route path="/keputusan/:applicationId" element={<KeputusanDetailPage />} />
         <Route path="/pic-pool" element={<PicPoolPage />} />
+        <Route path="/daftar-penyantun" element={<DonorRegistrationPage />} />
+        <Route path="/pool-penyantun" element={<PicPenyantunPoolPage />} />
       </Routes>
     </div>
   );
