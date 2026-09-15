@@ -14,11 +14,17 @@ import KeputusanDetailPage from './features/anak/KeputusanDetailPage';
 import PicPoolPage from './features/anak/PicPoolPage';
 import DonorRegistrationPage from './features/penyantun/DonorRegistrationPage';
 import PicPenyantunPoolPage from './features/penyantun/PicPenyantunPoolPage';
+import PairingPage from './features/penyantun/PairingPage';
+import AjukanPencairanPage from './features/keuangan/AjukanPencairanPage';
+import SusunBatchPage from './features/keuangan/SusunBatchPage';
+import ApprovalBatchPage from './features/keuangan/ApprovalBatchPage';
+import { useNavigate } from 'react-router-dom';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { profile, loading: profileLoading } = useUserProfile(session);
+  const navigate = useNavigate();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -49,7 +55,11 @@ function App() {
           <Link to="/pic-pool" className="text-blue-600">PIC Anak</Link>
           <Link to="/daftar-penyantun" className="text-blue-600">Daftar Penyantun</Link>
           <Link to="/pool-penyantun" className="text-blue-600">Pool Penyantun</Link>
-          <button onClick={() => supabase.auth.signOut()}>Keluar</button>
+          <Link to="/pairing" className="text-blue-600">Pairing</Link>
+          <Link to="/ajukan-pencairan" className="text-blue-600">Ajukan Pencairan</Link>
+          <Link to="/susun-batch" className="text-blue-600">Susun Batch</Link>
+          <Link to="/approval-batch" className="text-blue-600">Approval Batch</Link>
+          <button onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}>Keluar</button>
         </div>
       </nav>
 
@@ -65,6 +75,10 @@ function App() {
         <Route path="/pic-pool" element={<PicPoolPage />} />
         <Route path="/daftar-penyantun" element={<DonorRegistrationPage />} />
         <Route path="/pool-penyantun" element={<PicPenyantunPoolPage />} />
+        <Route path="/pairing" element={<PairingPage />} />
+        <Route path="/ajukan-pencairan" element={<AjukanPencairanPage />} />
+        <Route path="/susun-batch" element={<SusunBatchPage />} />
+        <Route path="/approval-batch" element={<ApprovalBatchPage />} />
       </Routes>
     </div>
   );
