@@ -9,6 +9,9 @@ import FormAPage from './features/pendaftaran/FormAPage';
 import AntrianSurveyPage from './features/anak/AntrianSurveyPage';
 import SurveyFormPage from './features/anak/SurveyFormPage';
 import type { Session } from '@supabase/supabase-js';
+import RapatKeputusanPage from './features/anak/RapatKeputusanPage';
+import KeputusanDetailPage from './features/anak/KeputusanDetailPage';
+import PicPoolPage from './features/anak/PicPoolPage';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -40,6 +43,8 @@ function App() {
           <Link to="/form-b" className="text-blue-600">Form B</Link>
           <Link to="/tinjau-form-b" className="text-blue-600">Tinjau Form B</Link>
           <Link to="/antrian-survey" className="text-blue-600">Antrian Survey</Link>
+          <Link to="/rapat-keputusan" className="text-blue-600">Rapat Keputusan</Link>
+          <Link to="/pic-pool" className="text-blue-600">PIC Anak</Link>
           <button onClick={() => supabase.auth.signOut()}>Keluar</button>
         </div>
       </nav>
@@ -50,7 +55,10 @@ function App() {
         <Route path="/tinjau-form-b" element={<TinjauFormBPage />} />
         <Route path="/form-a/:id" element={<FormAPage />} />
         <Route path="/antrian-survey" element={<AntrianSurveyPage />} />
-        <Route path="/survey/:id" element={<SurveyFormPage />} />
+        <Route path="/survey/:id" element={<SurveyFormPage />}/>
+        <Route path="/rapat-keputusan" element={<RapatKeputusanPage />} />
+        <Route path="/keputusan/:applicationId" element={<KeputusanDetailPage />} />
+        <Route path="/pic-pool" element={<PicPoolPage />} />
       </Routes>
     </div>
   );
