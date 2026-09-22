@@ -115,7 +115,7 @@ export default function KeputusanDetailPage() {
   const [survey, setSurvey] = useState<SurveyInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [decision, setDecision] = useState<'diterima' | 'ditolak'>('diterima');
+  const [decision, setDecision] = useState<'diterima' | 'ditolak' | 'kondisional'>('diterima');
   const [reason, setReason] = useState('');
   const [uangPangkal, setUangPangkal] = useState(0);
   const [sppBulanan, setSppBulanan] = useState(0);
@@ -190,10 +190,16 @@ export default function KeputusanDetailPage() {
       navigate('/rapat-keputusan');
       return;
     }
-
-    // Diterima: paket bantuan disimpan sementara di meeting_agenda_items.decision_reason
-    // (SK & anak_asak baru dibuat setelah Form A lengkap masuk — lihat FormAPage)
-    await supabase
+    if (decision === 'kondisional') {
+      await supabase
+        .from('applications')
+        .update({ status: 'perlu_followup' })
+        .eq('id', app.id);
+      setSaving(false);
+      navigate('/rapat-keputusan');
+      return;
+}
+    const { error: updateErr } = await supabase
       .from('applications')
       .update({
         status: 'menunggu_form_a',
@@ -202,6 +208,12 @@ export default function KeputusanDetailPage() {
       .eq('id', app.id);
 
     setSaving(false);
+
+    if (updateErr) {
+      alert('Gagal update status pengajuan: ' + updateErr.message);
+      return;
+    }
+
     setFormALink(`${window.location.origin}/form-a/${app.id}`);
   }
 
@@ -267,6 +279,7 @@ export default function KeputusanDetailPage() {
         <select value={decision} onChange={(e) => setDecision(e.target.value as 'diterima' | 'ditolak')} className="w-full border rounded-lg px-3 py-2">
           <option value="diterima">Diterima</option>
           <option value="ditolak">Ditolak</option>
+          <option value="kondisional">Perlu Follow-Up</option>
         </select>
       </div>
 
@@ -288,9 +301,10 @@ export default function KeputusanDetailPage() {
         </div>
       )}
 
-      {decision === 'ditolak' && (
+      {(decision === 'ditolak' || decision == 'kondisional') && (
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Alasan Penolakan</label>
+          <label className="block text-sm font-medium mb-1"> 
+              {decision === 'ditolak' ? 'Alasan Penolakan' : 'Informasi Masih Diperlukan'}</label>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border rounded-lg px-3 py-2" rows={2} />
         </div>
       )}

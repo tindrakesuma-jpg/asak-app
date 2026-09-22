@@ -37,20 +37,13 @@ function FileInput({ label, onUploaded }: { label: string; onUploaded: (url: str
   );
 }
 
-type PendingDecision = {
-  uangPangkal: number;
-  sppBulanan: number;
-  tunjangan: number;
-  agendaItemId: string;
-};
-
 export default function FormAPage() {
   const { id } = useParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [childName, setChildName] = useState('');
   const [familyId, setFamilyId] = useState<string | null>(null);
-  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null);
+ 
   const [appData, setAppData] = useState<{
     target_school_name: string;
     target_education_level: string;
@@ -104,12 +97,7 @@ export default function FormAPage() {
           target_class_semester: data.target_class_semester,
           school_year: data.school_year,
         });
-        try {
-          const parsed = JSON.parse(data.decision_reason ?? '{}');
-          if (parsed.agendaItemId) setPendingDecision(parsed);
-        } catch {
-          // decision_reason bukan JSON valid / kosong — biarkan pendingDecision null
-        }
+        
         setLoading(false);
       });
   }, [id]);
@@ -120,8 +108,7 @@ export default function FormAPage() {
     setSaving(true);
     setErrorMsg(null);
 
-    const { data: userData } = await supabase.auth.getUser();
-
+    
     // 1. Update data keluarga
     const { error: famErr } = await supabase
       .from('families')
@@ -170,46 +157,13 @@ export default function FormAPage() {
     }
 
     // 3. Kalau ada keputusan rapat yang menunggu (paket bantuan), terbitkan SK + paket sekarang
-    if (pendingDecision) {
-      const skNumber = `SK-ASAK-${appData.school_year.replace('/', '-')}-${Date.now().toString().slice(-6)}`;
-
-      const { data: sk, error: skErr } = await supabase
-        .from('sk_letters')
-        .insert({
-          agenda_item_id: pendingDecision.agendaItemId,
-          anak_id: anak.id,
-          sk_number: skNumber,
-          school_year: appData.school_year,
-          issued_by_user_id: userData.user?.id,
-          issued_date: new Date().toISOString().slice(0, 10),
-        })
-        .select('id')
-        .single();
-
-      if (skErr || !sk) {
-        setErrorMsg('Data keluarga & anak tersimpan, tapi gagal menerbitkan SK: ' + skErr?.message);
-        setSaving(false);
-        return;
-      }
-
-      const packages = [];
-      if (pendingDecision.uangPangkal > 0)
-        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'uang_pangkal', nominal: pendingDecision.uangPangkal });
-      if (pendingDecision.sppBulanan > 0)
-        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'spp_bulanan', nominal: pendingDecision.sppBulanan });
-      if (pendingDecision.tunjangan > 0)
-        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'tunjangan_semester', nominal: pendingDecision.tunjangan });
-
-      if (packages.length > 0) {
-        await supabase.from('bantuan_packages').insert(packages);
-      }
-    }
+    
 
     // 4. Update pengajuan: masuk antrian survey, simpan detail Form A, tautkan ke anak resmi
     const { error: appErr } = await supabase
       .from('applications')
       .update({
-        status: 'masuk_antrian',
+        status: 'menunggu_sk',
         form_a_submitted_at: new Date().toISOString(),
         anak_id: anak.id,
         id_asak_lama: idAsakLama || null,

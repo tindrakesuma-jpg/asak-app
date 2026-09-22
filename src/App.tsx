@@ -38,6 +38,8 @@ import PresensiRapatPage from './features/rapat/PresensiRapatPage';
 
 import MenungguFormAPage from './features/anak/MenungguFormAPage';
 import RiwayatFormBPage from './features/pendaftaran/RiwayatFormBPage';
+import TindakLanjutPage from './features/anak/TindakLanjutPage';
+import TerbitkanSKPage from './features/anak/TerbitkanSKPage';
 
 import type { Session } from '@supabase/supabase-js';
 
@@ -94,6 +96,8 @@ function AuthenticatedApp() {
         <Route path="/presensi-rapat" element={<PresensiRapatPage />} />
         <Route path="/menunggu-form-a" element={<MenungguFormAPage />} />
         <Route path="/riwayat-form-b" element={<RiwayatFormBPage />} />
+        <Route path="/tindak-lanjut" element={<TindakLanjutPage />} />
+        <Route path="/terbitkan-sk" element={<TerbitkanSKPage />} />
       </Routes>
     </div>
   );

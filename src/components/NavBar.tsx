@@ -34,6 +34,8 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/presensi-rapat', label: '📅 Jadwal Rapat', roles: ['TimAnakASAK', 'BendaharaASAK', 'SekretarisASAK', 'KetuaASAK', 'TimPenyantunASAK'] },
   { path: '/menunggu-form-a', label: 'Menunggu Form A', roles: ['TimAnakASAK'] },
   { path: '/riwayat-form-b', label: 'Riwayat Pengajuan Saya', roles: ['KetuaLingkungan'] },
+  { path: '/tindak-lanjut', label: 'Tindak Lanjut Saya', roles: ['TimAnakASAK'] },
+  { path: '/terbitkan-sk', label: 'Terbitkan SK', roles: ['SekretarisASAK'] },
 ];
 
 export default function NavBar({ name, roleName }: { name: string; roleName: string }) {
