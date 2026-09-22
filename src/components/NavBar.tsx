@@ -16,7 +16,7 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/verifikasi-rapor', label: 'Verifikasi Rapor', roles: ['TimAnakASAK'] },
   { path: '/relay-komentar', label: 'Relay Komentar', roles: ['TimAnakASAK'] },
 
-  { path: '/daftar-penyantun', label: 'Daftar Penyantun', roles: ['KetuaLingkungan', 'OrangTuaASAK', 'TimPenyantunASAK', 'SekretarisASAK'] },
+  { path: '/daftar-penyantun', label: 'Daftar Penyantun (Internal)', roles: ['TimPenyantunASAK', 'SekretarisASAK'] },
   { path: '/pool-penyantun', label: 'Pool Penyantun', roles: ['TimPenyantunASAK'] },
   { path: '/pairing', label: 'Pairing', roles: ['TimPenyantunASAK'] },
   { path: '/dashboard-penyantun', label: 'Dashboard Saya', roles: ['PenyantunASAK'] },

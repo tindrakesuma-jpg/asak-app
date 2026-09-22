@@ -12,6 +12,12 @@ type AppDetail = {
   school_year: string;
   is_new_child: boolean;
   anak_id: string | null;
+  rekening_sekolah_bank: string | null;
+  rekening_sekolah_nomor: string | null;
+  rekening_sekolah_nama: string | null;
+  rekening_ortu_bank: string | null;
+  rekening_ortu_nomor: string | null;
+  rekening_ortu_nama: string | null;
 };
 
 type SurveyInfo = {
@@ -40,7 +46,12 @@ export default function KeputusanDetailPage() {
 
     supabase
       .from('applications')
-      .select('id, child_name_proposed, family_id, target_education_level, target_school_name, target_class_semester, school_year, is_new_child, anak_id')
+      .select(`
+        id, child_name_proposed, family_id, target_education_level, target_school_name,
+        target_class_semester, school_year, is_new_child, anak_id,
+        rekening_sekolah_bank, rekening_sekolah_nomor, rekening_sekolah_nama,
+        rekening_ortu_bank, rekening_ortu_nomor, rekening_ortu_nama
+      `)
       .eq('id', applicationId)
       .single()
       .then(({ data }) => setApp(data));
@@ -63,7 +74,6 @@ export default function KeputusanDetailPage() {
 
     const { data: userData } = await supabase.auth.getUser();
 
-    // 1. Buat data anak_asak kalau anak baru
     let anakId = app.anak_id;
     if (decision === 'diterima' && !anakId) {
       const { data: anak, error: anakErr } = await supabase
@@ -75,6 +85,12 @@ export default function KeputusanDetailPage() {
           education_level: app.target_education_level,
           class_semester: app.target_class_semester,
           status: 'active',
+          school_account_bank: app.rekening_sekolah_bank,
+          school_account_number: app.rekening_sekolah_nomor,
+          school_account_name: app.rekening_sekolah_nama,
+          parent_account_bank: app.rekening_ortu_bank,
+          parent_account_number: app.rekening_ortu_nomor,
+          parent_account_name: app.rekening_ortu_nama,
         })
         .select('id')
         .single();
@@ -87,7 +103,6 @@ export default function KeputusanDetailPage() {
       anakId = anak.id;
     }
 
-    // 2. Buat meeting (insidental, langsung selesai — model rapat kilat per keputusan)
     const { data: meeting, error: meetingErr } = await supabase
       .from('meetings')
       .insert({
@@ -105,7 +120,6 @@ export default function KeputusanDetailPage() {
       return;
     }
 
-    // 3. Buat agenda item + keputusan
     const { data: agendaItem, error: agendaErr } = await supabase
       .from('meeting_agenda_items')
       .insert({
@@ -127,7 +141,6 @@ export default function KeputusanDetailPage() {
     }
 
     if (decision === 'diterima' && anakId) {
-      // 4. Terbitkan SK (nomor sederhana, belum counter transaksional formal)
       const skNumber = `SK-ASAK-${app.school_year.replace('/', '-')}-${Date.now().toString().slice(-6)}`;
 
       const { data: sk, error: skErr } = await supabase
@@ -149,7 +162,6 @@ export default function KeputusanDetailPage() {
         return;
       }
 
-      // 5. Simpan komponen paket bantuan yang diisi (nominal > 0 saja)
       const packages = [];
       if (uangPangkal > 0) packages.push({ sk_id: sk.id, anak_id: anakId, school_year: app.school_year, component_type: 'uang_pangkal', nominal: uangPangkal });
       if (sppBulanan > 0) packages.push({ sk_id: sk.id, anak_id: anakId, school_year: app.school_year, component_type: 'spp_bulanan', nominal: sppBulanan });
@@ -160,7 +172,6 @@ export default function KeputusanDetailPage() {
       }
     }
 
-    // 6. Update status pengajuan
     await supabase
       .from('applications')
       .update({ status: 'diputuskan', anak_id: anakId })
@@ -185,6 +196,18 @@ export default function KeputusanDetailPage() {
           <p>Nilai Akhir Survey: <strong>{survey.nilai_akhir}</strong></p>
           <p>Klasifikasi: <strong>{survey.klasifikasi}</strong></p>
           {survey.catatan_keluarga && <p className="mt-1 text-gray-600">"{survey.catatan_keluarga}"</p>}
+        </div>
+      )}
+
+      {(app.rekening_sekolah_nomor || app.rekening_ortu_nomor) && (
+        <div className="bg-blue-50 border rounded-lg p-4 mb-4 text-sm space-y-1">
+          <p className="font-semibold">Data Rekening (dari Form A)</p>
+          {app.rekening_sekolah_nomor && (
+            <p>Sekolah: {app.rekening_sekolah_bank} — {app.rekening_sekolah_nomor} a.n. {app.rekening_sekolah_nama}</p>
+          )}
+          {app.rekening_ortu_nomor && (
+            <p>Orang Tua: {app.rekening_ortu_bank} — {app.rekening_ortu_nomor} a.n. {app.rekening_ortu_nama}</p>
+          )}
         </div>
       )}
 

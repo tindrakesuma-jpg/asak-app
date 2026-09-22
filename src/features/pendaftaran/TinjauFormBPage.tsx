@@ -17,6 +17,7 @@ export default function TinjauFormBPage() {
   const [items, setItems] = useState<PendingApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [approvedLink, setApprovedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -81,10 +82,14 @@ export default function TinjauFormBPage() {
           <p className="text-sm font-medium text-green-800">Disetujui! Kirim link ini ke Orang Tua:</p>
           <p className="text-sm break-all text-blue-700 mt-1">{approvedLink}</p>
           <button
-            onClick={() => navigator.clipboard.writeText(approvedLink)}
+            onClick={async () => {
+              await navigator.clipboard.writeText(approvedLink);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
             className="text-xs bg-green-600 text-white px-3 py-1 rounded mt-2"
           >
-            Salin Link
+            {copied ? '✓ Tersalin!' : 'Salin Link'}
           </button>
         </div>
       )}
