@@ -5,6 +5,8 @@ import LoginPage from './features/auth/LoginPage';
 import { useUserProfile } from './features/auth/useUserProfile';
 import NavBar from './components/NavBar';
 
+import DonorRegistrationPage from './features/penyantun/DonorRegistrationPage';
+
 import FormBPage from './features/pendaftaran/FormBPage';
 import TinjauFormBPage from './features/pendaftaran/TinjauFormBPage';
 import FormAPage from './features/pendaftaran/FormAPage';
@@ -17,7 +19,6 @@ import UploadRaporPage from './features/anak/UploadRaporPage';
 import VerifikasiRaporPage from './features/anak/VerifikasiRaporPage';
 import RelayKomentarPage from './features/anak/RelayKomentarPage';
 
-import DonorRegistrationPage from './features/penyantun/DonorRegistrationPage';
 import PicPenyantunPoolPage from './features/penyantun/PicPenyantunPoolPage';
 import PairingPage from './features/penyantun/PairingPage';
 import DashboardPenyantunPage from './features/penyantun/DashboardPenyantunPage';
@@ -30,12 +31,11 @@ import ApproverGerejaPage from './features/keuangan/ApproverGerejaPage';
 import CatatRealisasiPage from './features/keuangan/CatatRealisasiPage';
 import DashboardKasPage from './features/keuangan/DashboardKasPage';
 import PinjamanPage from './features/keuangan/PinjamanPage';
-
 import KetuaDashboardPage from './features/ketua/KetuaDashboardPage';
 
 import type { Session } from '@supabase/supabase-js';
 
-function App() {
+function AuthenticatedApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { profile, loading: profileLoading } = useUserProfile(session);
@@ -58,7 +58,6 @@ function App() {
   return (
     <div>
       <NavBar name={profile.name} roleName={profile.roleName} />
-
       <Routes>
         <Route path="/" element={<p className="text-center mt-16">Selamat datang, {profile.name}</p>} />
         <Route path="/form-b" element={<FormBPage />} />
@@ -72,12 +71,10 @@ function App() {
         <Route path="/upload-rapor" element={<UploadRaporPage />} />
         <Route path="/verifikasi-rapor" element={<VerifikasiRaporPage />} />
         <Route path="/relay-komentar" element={<RelayKomentarPage />} />
-
         <Route path="/daftar-penyantun" element={<DonorRegistrationPage />} />
         <Route path="/pool-penyantun" element={<PicPenyantunPoolPage />} />
         <Route path="/pairing" element={<PairingPage />} />
         <Route path="/dashboard-penyantun" element={<DashboardPenyantunPage />} />
-
         <Route path="/ajukan-pencairan" element={<AjukanPencairanPage />} />
         <Route path="/susun-batch" element={<SusunBatchPage />} />
         <Route path="/approval-batch" element={<ApprovalBatchPage />} />
@@ -86,10 +83,21 @@ function App() {
         <Route path="/catat-realisasi" element={<CatatRealisasiPage />} />
         <Route path="/dashboard-kas" element={<DashboardKasPage />} />
         <Route path="/pinjaman" element={<PinjamanPage />} />
-
         <Route path="/dashboard-ketua" element={<KetuaDashboardPage />} />
       </Routes>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      {/* Rute PUBLIK — tanpa login sama sekali */}
+      <Route path="/daftar-penyantun-baru" element={<DonorRegistrationPage />} />
+
+      {/* Semua rute lain wajib login */}
+      <Route path="/*" element={<AuthenticatedApp />} />
+    </Routes>
   );
 }
 
