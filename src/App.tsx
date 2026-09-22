@@ -19,6 +19,11 @@ import AjukanPencairanPage from './features/keuangan/AjukanPencairanPage';
 import SusunBatchPage from './features/keuangan/SusunBatchPage';
 import ApprovalBatchPage from './features/keuangan/ApprovalBatchPage';
 import { useNavigate } from 'react-router-dom';
+import BendaharaGerejaPage from './features/keuangan/BendaharaGerejaPage';
+import ApproverGerejaPage from './features/keuangan/ApproverGerejaPage';
+import CatatRealisasiPage from './features/keuangan/CatatRealisasiPage';
+import DashboardKasPage from './features/keuangan/DashboardKasPage';
+import PinjamanPage from './features/keuangan/PinjamanPage';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -59,6 +64,11 @@ function App() {
           <Link to="/ajukan-pencairan" className="text-blue-600">Ajukan Pencairan</Link>
           <Link to="/susun-batch" className="text-blue-600">Susun Batch</Link>
           <Link to="/approval-batch" className="text-blue-600">Approval Batch</Link>
+          <Link to="/batch-gereja" className="text-blue-600">Batch Gereja</Link>
+          <Link to="/batch-transfer" className="text-blue-600">Batch Transfer</Link>
+          <Link to="/catat-realisasi" className="text-blue-600">Catat Santunan</Link>
+          <Link to="/dashboard-kas" className="text-blue-600">Dashboard Kas</Link>
+          <Link to="/pinjaman" className="text-blue-600">Pinjaman</Link>
           <button onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}>Keluar</button>
         </div>
       </nav>
@@ -79,6 +89,11 @@ function App() {
         <Route path="/ajukan-pencairan" element={<AjukanPencairanPage />} />
         <Route path="/susun-batch" element={<SusunBatchPage />} />
         <Route path="/approval-batch" element={<ApprovalBatchPage />} />
+        <Route path="/batch-gereja" element={<BendaharaGerejaPage />} />
+        <Route path="/batch-transfer" element={<ApproverGerejaPage />} />
+        <Route path="/catat-realisasi" element={<CatatRealisasiPage />} />
+        <Route path="/dashboard-kas" element={<DashboardKasPage />} />
+        <Route path="/pinjaman" element={<PinjamanPage />} />
       </Routes>
     </div>
   );
