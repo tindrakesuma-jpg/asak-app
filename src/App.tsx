@@ -33,6 +33,12 @@ import DashboardKasPage from './features/keuangan/DashboardKasPage';
 import PinjamanPage from './features/keuangan/PinjamanPage';
 import KetuaDashboardPage from './features/ketua/KetuaDashboardPage';
 
+import BuatJadwalRapatPage from './features/rapat/BuatJadwalRapatPage';
+import PresensiRapatPage from './features/rapat/PresensiRapatPage';
+
+import MenungguFormAPage from './features/anak/MenungguFormAPage';
+import RiwayatFormBPage from './features/pendaftaran/RiwayatFormBPage';
+
 import type { Session } from '@supabase/supabase-js';
 
 function AuthenticatedApp() {
@@ -84,6 +90,10 @@ function AuthenticatedApp() {
         <Route path="/dashboard-kas" element={<DashboardKasPage />} />
         <Route path="/pinjaman" element={<PinjamanPage />} />
         <Route path="/dashboard-ketua" element={<KetuaDashboardPage />} />
+        <Route path="/buat-jadwal-rapat" element={<BuatJadwalRapatPage />} />
+        <Route path="/presensi-rapat" element={<PresensiRapatPage />} />
+        <Route path="/menunggu-form-a" element={<MenungguFormAPage />} />
+        <Route path="/riwayat-form-b" element={<RiwayatFormBPage />} />
       </Routes>
     </div>
   );

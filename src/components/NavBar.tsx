@@ -29,6 +29,11 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/catat-realisasi', label: 'Catat Santunan', roles: ['BendaharaASAK'] },
   { path: '/dashboard-kas', label: 'Dashboard Kas', roles: ['BendaharaASAK', 'KetuaASAK'] },
   { path: '/pinjaman', label: 'Pinjaman', roles: ['BendaharaASAK'] },
+
+  { path: '/buat-jadwal-rapat', label: '📅 Buat Jadwal Rapat', roles: ['KetuaASAK', 'SekretarisASAK'] },
+  { path: '/presensi-rapat', label: '📅 Jadwal Rapat', roles: ['TimAnakASAK', 'BendaharaASAK', 'SekretarisASAK', 'KetuaASAK', 'TimPenyantunASAK'] },
+  { path: '/menunggu-form-a', label: 'Menunggu Form A', roles: ['TimAnakASAK'] },
+  { path: '/riwayat-form-b', label: 'Riwayat Pengajuan Saya', roles: ['KetuaLingkungan'] },
 ];
 
 export default function NavBar({ name, roleName }: { name: string; roleName: string }) {

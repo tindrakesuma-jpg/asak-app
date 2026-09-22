@@ -24,6 +24,14 @@ const INDICATORS = [
 
 type IncomeItem = { label: string; amount: number };
 type Freq = 'harian' | 'mingguan' | 'bulanan';
+type Consequence = 'denda' | 'tidak_boleh_ujian' | 'tidak_boleh_daftar_ulang' | 'tidak_ada' | 'lainnya';
+type DeadlineItem = {
+  item_label: string;
+  amount: number;
+  deadline_date: string;
+  consequence: Consequence;
+  consequence_detail: string;
+};
 
 const FREQ_MULTIPLIER: Record<Freq, number> = { harian: 30, mingguan: 30 / 7, bulanan: 1 };
 
@@ -42,7 +50,65 @@ const FLEXIBLE_FIELDS = [
   { key: 'expense_lainnya', label: 'Lainnya', defaultFreq: 'bulanan' as Freq },
 ] as const;
 
-// ---- Komponen input angka dengan tombol +/- (langkah default 10.000, makin cepat kalau ditahan) ----
+const CONSEQUENCE_LABEL: Record<Consequence, string> = {
+  denda: 'Denda (bukan ditanggung ASAK)',
+  tidak_boleh_ujian: 'Tidak boleh ikut ujian',
+  tidak_boleh_daftar_ulang: 'Tidak boleh daftar ulang/masuk sekolah',
+  tidak_ada: 'Tidak ada konsekuensi khusus',
+  lainnya: 'Lainnya',
+};
+
+// ---- Tombol upload/ambil foto langsung dari kamera HP ----
+async function uploadFile(file: File, folder: string): Promise<string> {
+  const fileName = `${folder}/${Date.now()}_${file.name}`;
+  const { error } = await supabase.storage.from('application-documents').upload(fileName, file);
+  if (error) throw error;
+  const { data } = supabase.storage.from('application-documents').getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
+function CameraButton({ label, url, onUploaded }: { label: string; url: string; onUploaded: (url: string) => void }) {
+  const [status, setStatus] = useState<'idle' | 'uploading'>('idle');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatus('uploading');
+    try {
+      const uploadedUrl = await uploadFile(file, 'survey-foto');
+      onUploaded(uploadedUrl);
+    } catch (err: any) {
+      alert('Gagal unggah: ' + err.message);
+    }
+    setStatus('idle');
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleChange}
+        className="hidden"
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl border-2 ${
+          url ? 'bg-green-100 border-green-400' : 'bg-gray-100 border-gray-300'
+        }`}
+      >
+        {status === 'uploading' ? '⏳' : url ? '✓' : '📷'}
+      </button>
+      <span className="text-xs text-gray-600 mt-1 text-center w-16">{label}</span>
+    </div>
+  );
+}
+
+// ---- Input angka dengan tombol +/-, makin lama ditahan makin cepat & makin besar lompatannya ----
 function NumberStepper({
   value,
   onChange,
@@ -54,7 +120,8 @@ function NumberStepper({
 }) {
   const valueRef = useRef(value);
   const timeoutRef = useRef<number | null>(null);
-  const speedRef = useRef(350);
+  const speedRef = useRef(300);
+  const tickCountRef = useRef(0);
 
   useEffect(() => {
     valueRef.current = value;
@@ -65,22 +132,31 @@ function NumberStepper({
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    tickCountRef.current = 0;
+  }
+
+  function effectiveStep() {
+    const accel = 1 + Math.floor(tickCountRef.current / 6) * 2; // step makin besar tiap ~6 tick
+    return step * Math.min(accel, 20);
   }
 
   function stepOnce(direction: 1 | -1) {
-    const next = direction === 1 ? valueRef.current + step : Math.max(0, valueRef.current - step);
+    const s = effectiveStep();
+    const next = direction === 1 ? valueRef.current + s : Math.max(0, valueRef.current - s);
     valueRef.current = next;
     onChange(next);
   }
 
   function start(direction: 1 | -1) {
-    speedRef.current = 350;
+    speedRef.current = 300;
+    tickCountRef.current = 0;
     function repeat() {
+      tickCountRef.current += 1;
       stepOnce(direction);
-      speedRef.current = Math.max(40, speedRef.current - 25);
+      speedRef.current = Math.max(30, speedRef.current - 20);
       timeoutRef.current = window.setTimeout(repeat, speedRef.current);
     }
-    timeoutRef.current = window.setTimeout(repeat, 350);
+    timeoutRef.current = window.setTimeout(repeat, 300);
   }
 
   return (
@@ -92,7 +168,7 @@ function NumberStepper({
         onMouseLeave={stop}
         onTouchStart={() => { stepOnce(-1); start(-1); }}
         onTouchEnd={stop}
-        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold"
+        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold select-none"
       >
         −
       </button>
@@ -110,7 +186,7 @@ function NumberStepper({
         onMouseLeave={stop}
         onTouchStart={() => { stepOnce(1); start(1); }}
         onTouchEnd={stop}
-        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold"
+        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold select-none"
       >
         +
       </button>
@@ -121,6 +197,10 @@ function NumberStepper({
 export default function SurveyFormPage() {
   const { id: assignmentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
+  const [fotoRumahUrl, setFotoRumahUrl] = useState('');
+  const [fotoWawancaraUrl, setFotoWawancaraUrl] = useState('');
+
   const [checked, setChecked] = useState<Record<number, boolean>>({});
   const [skorII, setSkorII] = useState('');
   const [catatan, setCatatan] = useState('');
@@ -140,6 +220,12 @@ export default function SurveyFormPage() {
   const [flexFreq, setFlexFreq] = useState<Record<string, Freq>>(
     Object.fromEntries(FLEXIBLE_FIELDS.map((f) => [f.key, f.defaultFreq]))
   );
+
+  const [deadlines, setDeadlines] = useState<DeadlineItem[]>([
+    { item_label: 'Uang Pembangunan (sekali masuk)', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' },
+    { item_label: 'Uang SKS/Semester (rata-rata)', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' },
+    { item_label: 'Biaya Ujian Semester', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' },
+  ]);
 
   const totalIncome = incomeItems.reduce((s, i) => s + (i.amount || 0), 0);
 
@@ -191,6 +277,16 @@ export default function SurveyFormPage() {
     setIncomeItems(incomeItems.filter((_, idx) => idx !== i));
   }
 
+  function addDeadlineRow() {
+    setDeadlines([...deadlines, { item_label: '', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' }]);
+  }
+  function updateDeadline(i: number, field: keyof DeadlineItem, value: string | number) {
+    setDeadlines(deadlines.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  }
+  function removeDeadline(i: number) {
+    setDeadlines(deadlines.filter((_, idx) => idx !== i));
+  }
+
   async function handleSubmit() {
     if (!assignmentId) return;
     setSaving(true);
@@ -207,6 +303,8 @@ export default function SurveyFormPage() {
         nilai_akhir: nilaiAkhir,
         klasifikasi: klasifikasi(nilaiAkhir),
         catatan_keluarga: catatan,
+        foto_rumah_url: fotoRumahUrl || null,
+        foto_wawancara_url: fotoWawancaraUrl || null,
       })
       .select('id')
       .single();
@@ -232,6 +330,20 @@ export default function SurveyFormPage() {
       ...allMonthlyExpenses,
     });
 
+    const validDeadlines = deadlines.filter((d) => d.item_label.trim() !== '');
+    if (validDeadlines.length > 0) {
+      await supabase.from('survey_payment_deadlines').insert(
+        validDeadlines.map((d) => ({
+          survey_id: survey.id,
+          item_label: d.item_label,
+          amount: d.amount,
+          deadline_date: d.deadline_date || null,
+          consequence: d.consequence,
+          consequence_detail: d.consequence_detail || null,
+        }))
+      );
+    }
+
     await supabase
       .from('survey_assignments')
       .update({ status: 'selesai', completed_at: new Date().toISOString() })
@@ -252,11 +364,18 @@ export default function SurveyFormPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 p-4">
-      <h2 className="text-xl font-bold mb-4">Survey KLMTD</h2>
+    <div className="max-w-2xl mx-auto mt-4 p-4">
+      {/* FOTO — sengaja di paling atas, dekat judul, gampang dijangkau di HP */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Survey KLMTD</h2>
+        <div className="flex gap-3">
+          <CameraButton label="Tampak Rumah" url={fotoRumahUrl} onUploaded={setFotoRumahUrl} />
+          <CameraButton label="Wawancara" url={fotoWawancaraUrl} onUploaded={setFotoWawancaraUrl} />
+        </div>
+      </div>
 
       {/* PEMASUKAN */}
-      <div className="border rounded-lg p-4 mb-6 bg-blue-50">
+      <div className="border rounded-lg p-4 mb-4 bg-blue-50">
         <h3 className="font-semibold mb-3">Wawancara Pemasukan</h3>
         {incomeItems.map((item, i) => (
           <div key={i} className="flex items-center gap-2 mb-2">
@@ -280,17 +399,14 @@ export default function SurveyFormPage() {
         {FIXED_MONTHLY_FIELDS.map((f) => (
           <div key={f.key} className="flex justify-between items-center gap-2 mb-2">
             <label className="text-sm w-36">{f.label}</label>
-            <NumberStepper
-              value={fixedExpenses[f.key]}
-              onChange={(v) => setFixedExpenses({ ...fixedExpenses, [f.key]: v })}
-            />
+            <NumberStepper value={fixedExpenses[f.key]} onChange={(v) => setFixedExpenses({ ...fixedExpenses, [f.key]: v })} />
           </div>
         ))}
       </div>
 
-      {/* PENGELUARAN FLEKSIBEL (harian/mingguan/bulanan) */}
-      <div className="border rounded-lg p-4 mb-6 bg-orange-50">
-        <h3 className="font-semibold mb-3">Pengeluaran Lain (pilih frekuensi sesuai jawaban keluarga)</h3>
+      {/* PENGELUARAN FLEKSIBEL */}
+      <div className="border rounded-lg p-4 mb-4 bg-orange-50">
+        <h3 className="font-semibold mb-3">Pengeluaran Lain (pilih frekuensi)</h3>
         {FLEXIBLE_FIELDS.map((f) => (
           <div key={f.key} className="mb-3">
             <div className="flex justify-between items-center gap-2">
@@ -316,12 +432,65 @@ export default function SurveyFormPage() {
         <p className="text-sm font-semibold mt-2">Total Pengeluaran: Rp{totalExpense.toLocaleString('id-ID')}</p>
       </div>
 
-      <div
-        className={`border rounded-lg p-4 mb-6 text-center font-bold ${
-          sisa < 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-        }`}
-      >
+      <div className={`border rounded-lg p-4 mb-6 text-center font-bold ${sisa < 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
         Sisa Tersedia untuk Anak: Rp{sisa.toLocaleString('id-ID')}
+      </div>
+
+      {/* DEADLINE & BIAYA SEKOLAH */}
+      <div className="border rounded-lg p-4 mb-6 bg-purple-50">
+        <h3 className="font-semibold mb-1">Info Biaya & Deadline Sekolah</h3>
+        <p className="text-xs text-gray-600 mb-3">
+          Tanyakan ke sekolah/keluarga kapan tiap biaya jatuh tempo, dan apa risikonya kalau telat — penting untuk atur waktu pencairan nanti.
+        </p>
+        {deadlines.map((d, i) => (
+          <div key={i} className="border rounded-lg p-3 bg-white mb-3 space-y-2">
+            <div className="flex gap-2">
+              <input
+                placeholder="Nama biaya (mis. Uang Pembangunan)"
+                value={d.item_label}
+                onChange={(e) => updateDeadline(i, 'item_label', e.target.value)}
+                className="flex-1 border rounded-lg px-2 py-1.5 text-sm"
+              />
+              <button onClick={() => removeDeadline(i)} className="text-red-600 text-sm px-1">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Nominal</label>
+                <NumberStepper value={d.amount} onChange={(v) => updateDeadline(i, 'amount', v)} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tanggal Jatuh Tempo</label>
+                <input
+                  type="date"
+                  value={d.deadline_date}
+                  onChange={(e) => updateDeadline(i, 'deadline_date', e.target.value)}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Konsekuensi Jika Telat</label>
+              <select
+                value={d.consequence}
+                onChange={(e) => updateDeadline(i, 'consequence', e.target.value)}
+                className="w-full border rounded-lg px-2 py-1.5 text-sm"
+              >
+                {Object.entries(CONSEQUENCE_LABEL).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {d.consequence !== 'tidak_ada' && (
+              <input
+                placeholder="Detail (mis. 'Rp50.000/bulan telat')"
+                value={d.consequence_detail}
+                onChange={(e) => updateDeadline(i, 'consequence_detail', e.target.value)}
+                className="w-full border rounded-lg px-2 py-1.5 text-sm"
+              />
+            )}
+          </div>
+        ))}
+        <button onClick={addDeadlineRow} className="text-sm text-blue-600">+ Tambah item biaya/deadline lain</button>
       </div>
 
       {/* INDIKATOR KLMTD */}

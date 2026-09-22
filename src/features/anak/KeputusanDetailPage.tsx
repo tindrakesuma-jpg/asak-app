@@ -1,6 +1,91 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+
+function NumberStepper({
+  value,
+  onChange,
+  step = 100000,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  step?: number;
+}) {
+  const valueRef = useRef(value);
+  const timeoutRef = useRef<number | null>(null);
+  const speedRef = useRef(300);
+  const tickCountRef = useRef(0);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  function stop() {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    tickCountRef.current = 0;
+  }
+
+  function effectiveStep() {
+    const accel = 1 + Math.floor(tickCountRef.current / 6) * 2;
+    return step * Math.min(accel, 20);
+  }
+
+  function stepOnce(direction: 1 | -1) {
+    const s = effectiveStep();
+    const next = direction === 1 ? valueRef.current + s : Math.max(0, valueRef.current - s);
+    valueRef.current = next;
+    onChange(next);
+  }
+
+  function start(direction: 1 | -1) {
+    speedRef.current = 300;
+    tickCountRef.current = 0;
+    function repeat() {
+      tickCountRef.current += 1;
+      stepOnce(direction);
+      speedRef.current = Math.max(30, speedRef.current - 20);
+      timeoutRef.current = window.setTimeout(repeat, speedRef.current);
+    }
+    timeoutRef.current = window.setTimeout(repeat, 300);
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onMouseDown={() => { stepOnce(-1); start(-1); }}
+        onMouseUp={stop}
+        onMouseLeave={stop}
+        onTouchStart={() => { stepOnce(-1); start(-1); }}
+        onTouchEnd={stop}
+        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold select-none"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        step={step}
+        value={value || ''}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 border rounded-lg px-2 py-1.5 text-sm text-center"
+      />
+      <button
+        type="button"
+        onMouseDown={() => { stepOnce(1); start(1); }}
+        onMouseUp={stop}
+        onMouseLeave={stop}
+        onTouchStart={() => { stepOnce(1); start(1); }}
+        onTouchEnd={stop}
+        className="w-8 h-8 bg-gray-200 rounded text-lg font-bold select-none"
+      >
+        +
+      </button>
+    </div>
+  );
+}
 
 type AppDetail = {
   id: string;
@@ -12,18 +97,14 @@ type AppDetail = {
   school_year: string;
   is_new_child: boolean;
   anak_id: string | null;
-  rekening_sekolah_bank: string | null;
-  rekening_sekolah_nomor: string | null;
-  rekening_sekolah_nama: string | null;
-  rekening_ortu_bank: string | null;
-  rekening_ortu_nomor: string | null;
-  rekening_ortu_nama: string | null;
 };
 
 type SurveyInfo = {
   nilai_akhir: number;
   klasifikasi: string;
   catatan_keluarga: string | null;
+  foto_rumah_url: string | null;
+  foto_wawancara_url: string | null;
 };
 
 export default function KeputusanDetailPage() {
@@ -41,24 +122,22 @@ export default function KeputusanDetailPage() {
   const [tunjangan, setTunjangan] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  const [formALink, setFormALink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     if (!applicationId) return;
 
     supabase
       .from('applications')
-      .select(`
-        id, child_name_proposed, family_id, target_education_level, target_school_name,
-        target_class_semester, school_year, is_new_child, anak_id,
-        rekening_sekolah_bank, rekening_sekolah_nomor, rekening_sekolah_nama,
-        rekening_ortu_bank, rekening_ortu_nomor, rekening_ortu_nama
-      `)
+      .select('id, child_name_proposed, family_id, target_education_level, target_school_name, target_class_semester, school_year, is_new_child, anak_id')
       .eq('id', applicationId)
       .single()
       .then(({ data }) => setApp(data));
 
     supabase
       .from('survey_assignments')
-      .select('id, klmtd_surveys(nilai_akhir, klasifikasi, catatan_keluarga)')
+      .select('id, klmtd_surveys(nilai_akhir, klasifikasi, catatan_keluarga, foto_rumah_url, foto_wawancara_url)')
       .eq('application_id', applicationId)
       .maybeSingle()
       .then(({ data }) => {
@@ -71,46 +150,11 @@ export default function KeputusanDetailPage() {
   async function handleSubmit() {
     if (!app) return;
     setSaving(true);
-
     const { data: userData } = await supabase.auth.getUser();
-
-    let anakId = app.anak_id;
-    if (decision === 'diterima' && !anakId) {
-      const { data: anak, error: anakErr } = await supabase
-        .from('anak_asak')
-        .insert({
-          name: app.child_name_proposed,
-          family_id: app.family_id,
-          school_name: app.target_school_name,
-          education_level: app.target_education_level,
-          class_semester: app.target_class_semester,
-          status: 'active',
-          school_account_bank: app.rekening_sekolah_bank,
-          school_account_number: app.rekening_sekolah_nomor,
-          school_account_name: app.rekening_sekolah_nama,
-          parent_account_bank: app.rekening_ortu_bank,
-          parent_account_number: app.rekening_ortu_nomor,
-          parent_account_name: app.rekening_ortu_nama,
-        })
-        .select('id')
-        .single();
-
-      if (anakErr || !anak) {
-        alert('Gagal membuat data anak: ' + anakErr?.message);
-        setSaving(false);
-        return;
-      }
-      anakId = anak.id;
-    }
 
     const { data: meeting, error: meetingErr } = await supabase
       .from('meetings')
-      .insert({
-        meeting_type: 'komite_penerimaan',
-        mode: 'insidental',
-        requested_by_user_id: userData.user?.id,
-        status: 'selesai',
-      })
+      .insert({ meeting_type: 'komite_penerimaan', mode: 'insidental', requested_by_user_id: userData.user?.id, status: 'selesai' })
       .select('id')
       .single();
 
@@ -125,7 +169,7 @@ export default function KeputusanDetailPage() {
       .insert({
         meeting_id: meeting.id,
         application_id: app.id,
-        anak_id: anakId,
+        anak_id: app.anak_id,
         topic_type: 'penerimaan',
         decision,
         decision_reason: reason || null,
@@ -140,49 +184,56 @@ export default function KeputusanDetailPage() {
       return;
     }
 
-    if (decision === 'diterima' && anakId) {
-      const skNumber = `SK-ASAK-${app.school_year.replace('/', '-')}-${Date.now().toString().slice(-6)}`;
-
-      const { data: sk, error: skErr } = await supabase
-        .from('sk_letters')
-        .insert({
-          agenda_item_id: agendaItem.id,
-          anak_id: anakId,
-          sk_number: skNumber,
-          school_year: app.school_year,
-          issued_by_user_id: userData.user?.id,
-          issued_date: new Date().toISOString().slice(0, 10),
-        })
-        .select('id')
-        .single();
-
-      if (skErr || !sk) {
-        alert('Gagal menerbitkan SK: ' + skErr?.message);
-        setSaving(false);
-        return;
-      }
-
-      const packages = [];
-      if (uangPangkal > 0) packages.push({ sk_id: sk.id, anak_id: anakId, school_year: app.school_year, component_type: 'uang_pangkal', nominal: uangPangkal });
-      if (sppBulanan > 0) packages.push({ sk_id: sk.id, anak_id: anakId, school_year: app.school_year, component_type: 'spp_bulanan', nominal: sppBulanan });
-      if (tunjangan > 0) packages.push({ sk_id: sk.id, anak_id: anakId, school_year: app.school_year, component_type: 'tunjangan_semester', nominal: tunjangan });
-
-      if (packages.length > 0) {
-        await supabase.from('bantuan_packages').insert(packages);
-      }
+    if (decision === 'ditolak') {
+      await supabase.from('applications').update({ status: 'ditolak_form_b' }).eq('id', app.id);
+      setSaving(false);
+      navigate('/rapat-keputusan');
+      return;
     }
 
+    // Diterima: paket bantuan disimpan sementara di meeting_agenda_items.decision_reason
+    // (SK & anak_asak baru dibuat setelah Form A lengkap masuk — lihat FormAPage)
     await supabase
       .from('applications')
-      .update({ status: 'diputuskan', anak_id: anakId })
+      .update({
+        status: 'menunggu_form_a',
+        decision_reason: JSON.stringify({ uangPangkal, sppBulanan, tunjangan, agendaItemId: agendaItem.id }),
+      })
       .eq('id', app.id);
 
     setSaving(false);
-    navigate('/rapat-keputusan');
+    setFormALink(`${window.location.origin}/form-a/${app.id}`);
   }
 
   if (loading) return <p className="text-center mt-16">Memuat...</p>;
   if (!app) return <p className="text-center mt-16">Data tidak ditemukan.</p>;
+
+  if (formALink) {
+    return (
+      <div className="max-w-md mx-auto mt-16 p-6 text-center">
+        <h2 className="text-xl font-bold text-green-700 mb-2">Diterima!</h2>
+        <p className="text-gray-600 mb-4">
+          Sampaikan link ini ke Orang Tua untuk melengkapi Form A (data keluarga & dokumen) sebelum bantuan bisa diproses.
+        </p>
+        <div className="bg-gray-50 border rounded-lg p-3 text-sm break-all mb-3">{formALink}</div>
+        <button
+          onClick={async () => {
+            await navigator.clipboard.writeText(formALink);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm mb-3"
+        >
+          {copied ? '✓ Tersalin!' : 'Salin Link'}
+        </button>
+        <div>
+          <button onClick={() => navigate('/rapat-keputusan')} className="text-blue-600 text-sm underline">
+            Kembali ke Rapat Keputusan
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-xl mx-auto mt-8 p-4">
@@ -196,28 +247,24 @@ export default function KeputusanDetailPage() {
           <p>Nilai Akhir Survey: <strong>{survey.nilai_akhir}</strong></p>
           <p>Klasifikasi: <strong>{survey.klasifikasi}</strong></p>
           {survey.catatan_keluarga && <p className="mt-1 text-gray-600">"{survey.catatan_keluarga}"</p>}
-        </div>
-      )}
-
-      {(app.rekening_sekolah_nomor || app.rekening_ortu_nomor) && (
-        <div className="bg-blue-50 border rounded-lg p-4 mb-4 text-sm space-y-1">
-          <p className="font-semibold">Data Rekening (dari Form A)</p>
-          {app.rekening_sekolah_nomor && (
-            <p>Sekolah: {app.rekening_sekolah_bank} — {app.rekening_sekolah_nomor} a.n. {app.rekening_sekolah_nama}</p>
-          )}
-          {app.rekening_ortu_nomor && (
-            <p>Orang Tua: {app.rekening_ortu_bank} — {app.rekening_ortu_nomor} a.n. {app.rekening_ortu_nama}</p>
-          )}
+          <div className="flex gap-2 mt-2">
+            {survey.foto_rumah_url && (
+              <a href={survey.foto_rumah_url} target="_blank" rel="noreferrer">
+                <img src={survey.foto_rumah_url} alt="Foto rumah" className="w-20 h-20 object-cover rounded-lg border" />
+              </a>
+            )}
+            {survey.foto_wawancara_url && (
+              <a href={survey.foto_wawancara_url} target="_blank" rel="noreferrer">
+                <img src={survey.foto_wawancara_url} alt="Foto wawancara" className="w-20 h-20 object-cover rounded-lg border" />
+              </a>
+            )}
+          </div>
         </div>
       )}
 
       <div className="mb-4">
         <label className="block text-sm font-medium mb-1">Keputusan</label>
-        <select
-          value={decision}
-          onChange={(e) => setDecision(e.target.value as 'diterima' | 'ditolak')}
-          className="w-full border rounded-lg px-3 py-2"
-        >
+        <select value={decision} onChange={(e) => setDecision(e.target.value as 'diterima' | 'ditolak')} className="w-full border rounded-lg px-3 py-2">
           <option value="diterima">Diterima</option>
           <option value="ditolak">Ditolak</option>
         </select>
@@ -228,15 +275,15 @@ export default function KeputusanDetailPage() {
           <p className="text-sm font-semibold">Paket Bantuan (isi 0 kalau tidak berlaku)</p>
           <div>
             <label className="block text-xs mb-1">Uang Pangkal (sekali, naik tingkat)</label>
-            <input type="number" value={uangPangkal} onChange={(e) => setUangPangkal(Number(e.target.value))} className="w-full border rounded-lg px-3 py-2" />
+            <NumberStepper value={uangPangkal} onChange={setUangPangkal} />
           </div>
           <div>
             <label className="block text-xs mb-1">SPP/SKS per bulan</label>
-            <input type="number" value={sppBulanan} onChange={(e) => setSppBulanan(Number(e.target.value))} className="w-full border rounded-lg px-3 py-2" />
+            <NumberStepper value={sppBulanan} onChange={setSppBulanan} />
           </div>
           <div>
             <label className="block text-xs mb-1">Tunjangan per semester</label>
-            <input type="number" value={tunjangan} onChange={(e) => setTunjangan(Number(e.target.value))} className="w-full border rounded-lg px-3 py-2" />
+            <NumberStepper value={tunjangan} onChange={setTunjangan} />
           </div>
         </div>
       )}
@@ -248,11 +295,7 @@ export default function KeputusanDetailPage() {
         </div>
       )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={saving}
-        className="w-full bg-blue-600 text-white rounded-lg py-3 font-medium disabled:opacity-50"
-      >
+      <button onClick={handleSubmit} disabled={saving} className="w-full bg-blue-600 text-white rounded-lg py-3 font-medium disabled:opacity-50">
         {saving ? 'Menyimpan...' : 'Simpan Keputusan'}
       </button>
     </div>

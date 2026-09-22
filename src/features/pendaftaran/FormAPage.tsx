@@ -37,12 +37,26 @@ function FileInput({ label, onUploaded }: { label: string; onUploaded: (url: str
   );
 }
 
+type PendingDecision = {
+  uangPangkal: number;
+  sppBulanan: number;
+  tunjangan: number;
+  agendaItemId: string;
+};
+
 export default function FormAPage() {
   const { id } = useParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [childName, setChildName] = useState('');
   const [familyId, setFamilyId] = useState<string | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null);
+  const [appData, setAppData] = useState<{
+    target_school_name: string;
+    target_education_level: string;
+    target_class_semester: string | null;
+    school_year: string;
+  } | null>(null);
 
   const [kkNumber, setKkNumber] = useState('');
   const [address, setAddress] = useState('');
@@ -73,15 +87,28 @@ export default function FormAPage() {
     if (!id) return;
     supabase
       .from('applications')
-      .select('child_name_proposed, family_id, status')
+      .select('child_name_proposed, family_id, status, decision_reason, target_school_name, target_education_level, target_class_semester, school_year')
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
         if (error || !data || data.status !== 'menunggu_form_a') {
           setNotFound(true);
-        } else {
-          setChildName(data.child_name_proposed ?? '');
-          setFamilyId(data.family_id);
+          setLoading(false);
+          return;
+        }
+        setChildName(data.child_name_proposed ?? '');
+        setFamilyId(data.family_id);
+        setAppData({
+          target_school_name: data.target_school_name,
+          target_education_level: data.target_education_level,
+          target_class_semester: data.target_class_semester,
+          school_year: data.school_year,
+        });
+        try {
+          const parsed = JSON.parse(data.decision_reason ?? '{}');
+          if (parsed.agendaItemId) setPendingDecision(parsed);
+        } catch {
+          // decision_reason bukan JSON valid / kosong — biarkan pendingDecision null
         }
         setLoading(false);
       });
@@ -89,10 +116,13 @@ export default function FormAPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!familyId || !id) return;
+    if (!familyId || !id || !appData) return;
     setSaving(true);
     setErrorMsg(null);
 
+    const { data: userData } = await supabase.auth.getUser();
+
+    // 1. Update data keluarga
     const { error: famErr } = await supabase
       .from('families')
       .update({
@@ -113,11 +143,75 @@ export default function FormAPage() {
       return;
     }
 
+    // 2. Buat data anak_asak resmi (dengan rekening dari Form A ini)
+    const { data: anak, error: anakErr } = await supabase
+      .from('anak_asak')
+      .insert({
+        name: childName,
+        family_id: familyId,
+        school_name: appData.target_school_name,
+        education_level: appData.target_education_level,
+        class_semester: appData.target_class_semester,
+        status: 'active',
+        school_account_bank: rekSekolahBank,
+        school_account_number: rekSekolahNomor,
+        school_account_name: rekSekolahNama,
+        parent_account_bank: rekOrtuBank,
+        parent_account_number: rekOrtuNomor,
+        parent_account_name: rekOrtuNama,
+      })
+      .select('id')
+      .single();
+
+    if (anakErr || !anak) {
+      setErrorMsg('Gagal membuat data anak: ' + anakErr?.message);
+      setSaving(false);
+      return;
+    }
+
+    // 3. Kalau ada keputusan rapat yang menunggu (paket bantuan), terbitkan SK + paket sekarang
+    if (pendingDecision) {
+      const skNumber = `SK-ASAK-${appData.school_year.replace('/', '-')}-${Date.now().toString().slice(-6)}`;
+
+      const { data: sk, error: skErr } = await supabase
+        .from('sk_letters')
+        .insert({
+          agenda_item_id: pendingDecision.agendaItemId,
+          anak_id: anak.id,
+          sk_number: skNumber,
+          school_year: appData.school_year,
+          issued_by_user_id: userData.user?.id,
+          issued_date: new Date().toISOString().slice(0, 10),
+        })
+        .select('id')
+        .single();
+
+      if (skErr || !sk) {
+        setErrorMsg('Data keluarga & anak tersimpan, tapi gagal menerbitkan SK: ' + skErr?.message);
+        setSaving(false);
+        return;
+      }
+
+      const packages = [];
+      if (pendingDecision.uangPangkal > 0)
+        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'uang_pangkal', nominal: pendingDecision.uangPangkal });
+      if (pendingDecision.sppBulanan > 0)
+        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'spp_bulanan', nominal: pendingDecision.sppBulanan });
+      if (pendingDecision.tunjangan > 0)
+        packages.push({ sk_id: sk.id, anak_id: anak.id, school_year: appData.school_year, component_type: 'tunjangan_semester', nominal: pendingDecision.tunjangan });
+
+      if (packages.length > 0) {
+        await supabase.from('bantuan_packages').insert(packages);
+      }
+    }
+
+    // 4. Update pengajuan: masuk antrian survey, simpan detail Form A, tautkan ke anak resmi
     const { error: appErr } = await supabase
       .from('applications')
       .update({
         status: 'masuk_antrian',
         form_a_submitted_at: new Date().toISOString(),
+        anak_id: anak.id,
         id_asak_lama: idAsakLama || null,
         rekening_sekolah_bank: rekSekolahBank,
         rekening_sekolah_nomor: rekSekolahNomor,
@@ -154,7 +248,7 @@ export default function FormAPage() {
       <div className="max-w-md mx-auto mt-16 p-6 text-center">
         <h2 className="text-xl font-bold text-green-700">Form A Terkirim!</h2>
         <p className="mt-2 text-gray-600">
-          Terima kasih. Pengajuan untuk <strong>{childName}</strong> akan masuk antrian survey.
+          Terima kasih. <strong>{childName}</strong> kini resmi terdaftar sebagai Anak ASAK, dan Surat Keputusan sudah diterbitkan.
         </p>
       </div>
     );
