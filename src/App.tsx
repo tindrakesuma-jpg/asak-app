@@ -24,6 +24,10 @@ import ApproverGerejaPage from './features/keuangan/ApproverGerejaPage';
 import CatatRealisasiPage from './features/keuangan/CatatRealisasiPage';
 import DashboardKasPage from './features/keuangan/DashboardKasPage';
 import PinjamanPage from './features/keuangan/PinjamanPage';
+import DashboardPenyantunPage from './features/penyantun/DashboardPenyantunPage';
+import UploadRaporPage from './features/anak/UploadRaporPage';
+import VerifikasiRaporPage from './features/anak/VerifikasiRaporPage';
+import RelayKomentarPage from './features/anak/RelayKomentarPage';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -69,6 +73,10 @@ function App() {
           <Link to="/catat-realisasi" className="text-blue-600">Catat Santunan</Link>
           <Link to="/dashboard-kas" className="text-blue-600">Dashboard Kas</Link>
           <Link to="/pinjaman" className="text-blue-600">Pinjaman</Link>
+          <Link to="/dashboard-penyantun" className="text-blue-600">Dashboard Saya</Link>
+          <Link to="/upload-rapor" className="text-blue-600">Upload Rapor</Link>
+          <Link to="/verifikasi-rapor" className="text-blue-600">Verifikasi Rapor</Link>
+          <Link to="/relay-komentar" className="text-blue-600">Relay Komentar</Link>
           <button onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}>Keluar</button>
         </div>
       </nav>
@@ -94,6 +102,10 @@ function App() {
         <Route path="/catat-realisasi" element={<CatatRealisasiPage />} />
         <Route path="/dashboard-kas" element={<DashboardKasPage />} />
         <Route path="/pinjaman" element={<PinjamanPage />} />
+        <Route path="/dashboard-penyantun" element={<DashboardPenyantunPage />} />
+        <Route path="/upload-rapor" element={<UploadRaporPage />} />
+        <Route path="/verifikasi-rapor" element={<VerifikasiRaporPage />} />
+        <Route path="/relay-komentar" element={<RelayKomentarPage />} />
       </Routes>
     </div>
   );
