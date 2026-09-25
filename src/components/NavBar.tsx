@@ -36,6 +36,9 @@ const MENU_ITEMS: MenuItem[] = [
   { path: '/riwayat-form-b', label: 'Riwayat Pengajuan Saya', roles: ['KetuaLingkungan'] },
   { path: '/tindak-lanjut', label: 'Tindak Lanjut Saya', roles: ['TimAnakASAK'] },
   { path: '/terbitkan-sk', label: 'Terbitkan SK', roles: ['SekretarisASAK'] },
+  { path: '/kelola-form-h', label: 'Kelola Form H', roles: ['TimAnakASAK'] },
+  { path: '/status-semua-anak', label: '📊 Status Semua Anak', roles: ['TimAnakASAK', 'KetuaASAK'] },
+  { path: '/tracker-due-penyantun', label: '📋 Tracker Due Penyantun', roles: ['TimPenyantunASAK', 'BendaharaASAK', 'KetuaASAK'] },
 ];
 
 export default function NavBar({ name, roleName }: { name: string; roleName: string }) {
@@ -59,12 +62,19 @@ export default function NavBar({ name, roleName }: { name: string; roleName: str
           <strong>{name}</strong> <span className="text-gray-500">— {roleName}</span>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => setOpen(!open)} className="text-sm bg-white border rounded-lg px-3 py-1.5">
-            Menu {open ? '▲' : '▼'}
-          </button>
-          <button onClick={handleLogout} className="text-sm text-gray-600">Keluar</button>
+        <Link
+            to="/ringkasan-wa"
+            className="w-9 h-9 bg-green-500 rounded-full flex items-center justify-center text-white text-lg"
+            title="Ringkasan WhatsApp Group"
+            >
+                💬
+        </Link>
+            <button onClick={() => setOpen(!open)} className="text-sm bg-white border rounded-lg px-3 py-1.5">
+                Menu {open ? '▲' : '▼'}
+            </button>
+            <button onClick={handleLogout} className="text-sm text-gray-600">Keluar</button>
         </div>
-      </div>
+       </div>
 
       {open && (
         <div className="px-4 pb-4">

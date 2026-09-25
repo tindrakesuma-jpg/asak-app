@@ -40,6 +40,11 @@ import MenungguFormAPage from './features/anak/MenungguFormAPage';
 import RiwayatFormBPage from './features/pendaftaran/RiwayatFormBPage';
 import TindakLanjutPage from './features/anak/TindakLanjutPage';
 import TerbitkanSKPage from './features/anak/TerbitkanSKPage';
+import KelolaFormHPage from './features/pendaftaran/KelolaFormHPage';
+import FormHPage from './features/pendaftaran/FormHPage';
+import StatusSemuaAnakPage from './features/anak/StatusSemuaAnakPage';
+import RingkasanWAPage from './features/anak/RingkasanWAPage';
+import TrackerDuePenyantunPage from './features/penyantun/TrackerDuePenyantunPage';
 
 import type { Session } from '@supabase/supabase-js';
 
@@ -98,6 +103,11 @@ function AuthenticatedApp() {
         <Route path="/riwayat-form-b" element={<RiwayatFormBPage />} />
         <Route path="/tindak-lanjut" element={<TindakLanjutPage />} />
         <Route path="/terbitkan-sk" element={<TerbitkanSKPage />} />
+        <Route path="/kelola-form-h" element={<KelolaFormHPage />} />
+        <Route path="/form-h/:id" element={<FormHPage />} />
+        <Route path="/status-semua-anak" element={<StatusSemuaAnakPage />} />
+        <Route path="/ringkasan-wa" element={<RingkasanWAPage />} />
+        <Route path="/tracker-due-penyantun" element={<TrackerDuePenyantunPage />} />
       </Routes>
     </div>
   );

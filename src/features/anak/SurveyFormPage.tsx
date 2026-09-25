@@ -58,7 +58,6 @@ const CONSEQUENCE_LABEL: Record<Consequence, string> = {
   lainnya: 'Lainnya',
 };
 
-// ---- Tombol upload/ambil foto langsung dari kamera HP ----
 async function uploadFile(file: File, folder: string): Promise<string> {
   const fileName = `${folder}/${Date.now()}_${file.name}`;
   const { error } = await supabase.storage.from('application-documents').upload(fileName, file);
@@ -86,14 +85,7 @@ function CameraButton({ label, url, onUploaded }: { label: string; url: string; 
 
   return (
     <div className="flex flex-col items-center">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleChange}
-        className="hidden"
-      />
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleChange} className="hidden" />
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -108,7 +100,6 @@ function CameraButton({ label, url, onUploaded }: { label: string; url: string; 
   );
 }
 
-// ---- Input angka dengan tombol +/-, makin lama ditahan makin cepat & makin besar lompatannya ----
 function NumberStepper({
   value,
   onChange,
@@ -136,7 +127,7 @@ function NumberStepper({
   }
 
   function effectiveStep() {
-    const accel = 1 + Math.floor(tickCountRef.current / 6) * 2; // step makin besar tiap ~6 tick
+    const accel = 1 + Math.floor(tickCountRef.current / 6) * 2;
     return step * Math.min(accel, 20);
   }
 
@@ -198,6 +189,9 @@ export default function SurveyFormPage() {
   const { id: assignmentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const [prefilled, setPrefilled] = useState(false);
+  const [prefillDate, setPrefillDate] = useState<string | null>(null);
+  const [meetingReason, setMeetingReason] = useState<string | null>(null);
   const [fotoRumahUrl, setFotoRumahUrl] = useState('');
   const [fotoWawancaraUrl, setFotoWawancaraUrl] = useState('');
 
@@ -226,6 +220,114 @@ export default function SurveyFormPage() {
     { item_label: 'Uang SKS/Semester (rata-rata)', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' },
     { item_label: 'Biaya Ujian Semester', amount: 0, deadline_date: '', consequence: 'tidak_ada', consequence_detail: '' },
   ]);
+
+  // ---- Ambil data survey SEBELUMNYA (kalau ini survey ulang) untuk pre-fill ----
+  useEffect(() => {
+    async function loadPreviousSurvey() {
+  if (!assignmentId) return;
+
+  const { data: currentAssignment } = await supabase
+    .from('survey_assignments')
+    .select('application_id')
+    .eq('id', assignmentId)
+    .single();
+
+  if (!currentAssignment) return;
+
+// Cari alasan rapat terakhir (kalau ini hasil "Perlu Follow-up" / "Survey Ulang")
+const { data: lastAgendaItem } = await supabase
+  .from('meeting_agenda_items')
+  .select('decision_reason, decided_at')
+  .eq('application_id', currentAssignment.application_id)
+  .eq('decision', 'kondisional')
+  .order('decided_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+if (lastAgendaItem?.decision_reason) {
+  setMeetingReason(lastAgendaItem.decision_reason);
+}
+
+  const { data: currentApplication } = await supabase
+    .from('applications')
+    .select('anak_id')
+    .eq('id', currentAssignment.application_id)
+    .single();
+
+  if (!currentApplication?.anak_id) return; // anak baru, belum ada anak_id, tidak mungkin ada survey lama
+
+  // Cari SEMUA application milik anak yang sama (Form B/H tahun manapun)
+  const { data: allApplicationsForAnak } = await supabase
+    .from('applications')
+    .select('id')
+    .eq('anak_id', currentApplication.anak_id);
+
+  const applicationIds = (allApplicationsForAnak ?? []).map((a) => a.id);
+  if (applicationIds.length === 0) return;
+
+  const { data: previousAssignments } = await supabase
+    .from('survey_assignments')
+    .select('id, completed_at, klmtd_surveys(id, skor_ii, catatan_keluarga, survey_date, klmtd_survey_items(item_no, is_checked), klmtd_financial_details(income_items, expense_makan, expense_listrik, expense_air, expense_sewa_rumah, expense_bensin, expense_transport_sekolah, expense_transport_ortu, expense_biaya_sekolah, expense_lainnya))')
+    .in('application_id', applicationIds)
+    .eq('status', 'selesai')
+    .neq('id', assignmentId)
+    .order('completed_at', { ascending: false })
+    .limit(1);
+
+  const prev = previousAssignments?.[0];
+  if (!prev) return;
+
+      const surveyRaw = (prev as any).klmtd_surveys;
+      const survey = Array.isArray(surveyRaw) ? surveyRaw[0] : surveyRaw;
+      if (!survey) return;
+
+      setPrefilled(true);
+      setPrefillDate(survey.survey_date);
+      setSkorII(String(survey.skor_ii ?? ''));
+      setCatatan(survey.catatan_keluarga ?? '');
+
+      const items = survey.klmtd_survey_items ?? [];
+      const checkedMap: Record<number, boolean> = {};
+      items.forEach((it: any) => {
+        checkedMap[it.item_no] = it.is_checked;
+      });
+      setChecked(checkedMap);
+
+      const finRaw = survey.klmtd_financial_details;
+      const fin = Array.isArray(finRaw) ? finRaw[0] : finRaw;
+      if (fin) {
+        setIncomeItems(fin.income_items ?? []);
+        setFixedExpenses(
+          Object.fromEntries(FIXED_MONTHLY_FIELDS.map((f) => [f.key, Number(fin[f.key]) || 0]))
+        );
+        setFlexRaw(
+          Object.fromEntries(FLEXIBLE_FIELDS.map((f) => [f.key, Number(fin[f.key]) || 0]))
+        );
+        setFlexFreq(
+          Object.fromEntries(FLEXIBLE_FIELDS.map((f) => [f.key, 'bulanan' as Freq]))
+  );
+      }
+
+      const { data: prevDeadlines } = await supabase
+        .from('survey_payment_deadlines')
+        .select('item_label, amount, deadline_date, consequence, consequence_detail')
+        .eq('survey_id', survey.id);
+
+      if (prevDeadlines && prevDeadlines.length > 0) {
+        setDeadlines(
+          prevDeadlines.map((d) => ({
+            item_label: d.item_label,
+            amount: Number(d.amount),
+            deadline_date: d.deadline_date ?? '',
+            consequence: d.consequence as Consequence,
+            consequence_detail: d.consequence_detail ?? '',
+          }))
+        );
+      }
+    }
+
+    loadPreviousSurvey();
+  }, [assignmentId]);
 
   const totalIncome = incomeItems.reduce((s, i) => s + (i.amount || 0), 0);
 
@@ -365,7 +467,6 @@ export default function SurveyFormPage() {
 
   return (
     <div className="max-w-2xl mx-auto mt-4 p-4">
-      {/* FOTO — sengaja di paling atas, dekat judul, gampang dijangkau di HP */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Survey KLMTD</h2>
         <div className="flex gap-3">
@@ -374,7 +475,18 @@ export default function SurveyFormPage() {
         </div>
       </div>
 
-      {/* PEMASUKAN */}
+      {prefilled && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+          ⚠️ Data dari survey sebelumnya ({prefillDate}) sudah dimuat — periksa & perbarui sesuai kondisi terkini sebelum mengirim.
+        </div>
+      )}
+
+      {meetingReason && (
+  <div className="bg-orange-50 border border-orange-300 rounded-lg p-3 mb-4 text-sm text-orange-800">
+    📋 Alasan diminta survey ulang oleh Rapat Komite: <strong>{meetingReason}</strong>
+  </div>
+)}
+
       <div className="border rounded-lg p-4 mb-4 bg-blue-50">
         <h3 className="font-semibold mb-3">Wawancara Pemasukan</h3>
         {incomeItems.map((item, i) => (
@@ -393,7 +505,6 @@ export default function SurveyFormPage() {
         <p className="text-sm font-semibold mt-3">Total Pemasukan: Rp{totalIncome.toLocaleString('id-ID')}</p>
       </div>
 
-      {/* PENGELUARAN BULANAN TETAP */}
       <div className="border rounded-lg p-4 mb-4 bg-orange-50">
         <h3 className="font-semibold mb-3">Pengeluaran Bulanan</h3>
         {FIXED_MONTHLY_FIELDS.map((f) => (
@@ -404,7 +515,6 @@ export default function SurveyFormPage() {
         ))}
       </div>
 
-      {/* PENGELUARAN FLEKSIBEL */}
       <div className="border rounded-lg p-4 mb-4 bg-orange-50">
         <h3 className="font-semibold mb-3">Pengeluaran Lain (pilih frekuensi)</h3>
         {FLEXIBLE_FIELDS.map((f) => (
@@ -436,11 +546,10 @@ export default function SurveyFormPage() {
         Sisa Tersedia untuk Anak: Rp{sisa.toLocaleString('id-ID')}
       </div>
 
-      {/* DEADLINE & BIAYA SEKOLAH */}
       <div className="border rounded-lg p-4 mb-6 bg-purple-50">
         <h3 className="font-semibold mb-1">Info Biaya & Deadline Sekolah</h3>
         <p className="text-xs text-gray-600 mb-3">
-          Tanyakan ke sekolah/keluarga kapan tiap biaya jatuh tempo, dan apa risikonya kalau telat — penting untuk atur waktu pencairan nanti.
+          Tanyakan ke sekolah/keluarga kapan tiap biaya jatuh tempo, dan apa risikonya kalau telat.
         </p>
         {deadlines.map((d, i) => (
           <div key={i} className="border rounded-lg p-3 bg-white mb-3 space-y-2">
@@ -493,7 +602,6 @@ export default function SurveyFormPage() {
         <button onClick={addDeadlineRow} className="text-sm text-blue-600">+ Tambah item biaya/deadline lain</button>
       </div>
 
-      {/* INDIKATOR KLMTD */}
       <h3 className="font-semibold mb-2">17 Indikator KLMTD</h3>
       <div className="space-y-2 mb-6">
         {INDICATORS.map((ind) => {

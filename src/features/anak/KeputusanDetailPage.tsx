@@ -107,6 +107,9 @@ type SurveyInfo = {
   foto_wawancara_url: string | null;
 };
 
+type Decision = 'diterima' | 'ditolak' | 'kondisional';
+type FollowUpType = 'tambahan_info' | 'survey_ulang';
+
 export default function KeputusanDetailPage() {
   const { applicationId } = useParams<{ applicationId: string }>();
   const navigate = useNavigate();
@@ -115,7 +118,8 @@ export default function KeputusanDetailPage() {
   const [survey, setSurvey] = useState<SurveyInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [decision, setDecision] = useState<'diterima' | 'ditolak' | 'kondisional'>('diterima');
+  const [decision, setDecision] = useState<Decision>('diterima');
+  const [followUpType, setFollowUpType] = useState<FollowUpType>('tambahan_info');
   const [reason, setReason] = useState('');
   const [uangPangkal, setUangPangkal] = useState(0);
   const [sppBulanan, setSppBulanan] = useState(0);
@@ -139,6 +143,8 @@ export default function KeputusanDetailPage() {
       .from('survey_assignments')
       .select('id, klmtd_surveys(nilai_akhir, klasifikasi, catatan_keluarga, foto_rumah_url, foto_wawancara_url)')
       .eq('application_id', applicationId)
+      .order('claimed_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
       .then(({ data }) => {
         const s = (data as any)?.klmtd_surveys;
@@ -190,15 +196,37 @@ export default function KeputusanDetailPage() {
       navigate('/rapat-keputusan');
       return;
     }
+
     if (decision === 'kondisional') {
-      await supabase
-        .from('applications')
-        .update({ status: 'perlu_followup' })
-        .eq('id', app.id);
+      const newStatus = followUpType === 'survey_ulang' ? 'masuk_antrian' : 'perlu_followup';
+      await supabase.from('applications').update({ status: newStatus }).eq('id', app.id);
       setSaving(false);
       navigate('/rapat-keputusan');
       return;
-}
+    }
+
+    // decision === 'diterima' dari sini ke bawah
+
+    if (app.anak_id) {
+      // Anak lanjutan (Form H) — anak_asak sudah ada, langsung ke Menunggu SK, skip Form A
+      const { error: updateErr } = await supabase
+        .from('applications')
+        .update({
+          status: 'menunggu_sk',
+          decision_reason: JSON.stringify({ uangPangkal, sppBulanan, tunjangan, agendaItemId: agendaItem.id }),
+        })
+        .eq('id', app.id);
+
+      setSaving(false);
+      if (updateErr) {
+        alert('Gagal update status pengajuan: ' + updateErr.message);
+        return;
+      }
+      navigate('/rapat-keputusan');
+      return;
+    }
+
+    // Anak baru (Form B) — anak_asak belum ada, perlu Form A dulu
     const { error: updateErr } = await supabase
       .from('applications')
       .update({
@@ -254,11 +282,11 @@ export default function KeputusanDetailPage() {
         {app.target_education_level} — {app.target_school_name} ({app.school_year})
       </p>
 
-      {survey && (
+      {survey ? (
         <div className="bg-gray-50 border rounded-lg p-4 mb-4 text-sm">
           <p>Nilai Akhir Survey: <strong>{survey.nilai_akhir}</strong></p>
           <p>Klasifikasi: <strong>{survey.klasifikasi}</strong></p>
-          {survey.catatan_keluarga && <p className="mt-1 text-gray-600">"{survey.catatan_keluarga}"</p>}
+          {survey.catatan_keluarga && <p className="mt-1 text-gray-600 whitespace-pre-wrap">"{survey.catatan_keluarga}"</p>}
           <div className="flex gap-2 mt-2">
             {survey.foto_rumah_url && (
               <a href={survey.foto_rumah_url} target="_blank" rel="noreferrer">
@@ -272,11 +300,26 @@ export default function KeputusanDetailPage() {
             )}
           </div>
         </div>
+      ) : (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-sm text-yellow-800">
+          Tidak ada data survey untuk pengajuan ini (survey dilewati, atau Form H tanpa survey ulang).
+        </div>
+      )}
+
+      {!app.anak_id && (
+        <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg p-2 mb-4">
+          Anak baru — jika Diterima, Orang Tua akan diminta melengkapi Form A dulu.
+        </p>
+      )}
+      {app.anak_id && (
+        <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg p-2 mb-4">
+          Anak lanjutan (Form H) — jika Diterima, langsung lanjut ke penerbitan SK oleh Sekretaris.
+        </p>
       )}
 
       <div className="mb-4">
         <label className="block text-sm font-medium mb-1">Keputusan</label>
-        <select value={decision} onChange={(e) => setDecision(e.target.value as 'diterima' | 'ditolak')} className="w-full border rounded-lg px-3 py-2">
+        <select value={decision} onChange={(e) => setDecision(e.target.value as Decision)} className="w-full border rounded-lg px-3 py-2">
           <option value="diterima">Diterima</option>
           <option value="ditolak">Ditolak</option>
           <option value="kondisional">Perlu Follow-Up</option>
@@ -301,10 +344,24 @@ export default function KeputusanDetailPage() {
         </div>
       )}
 
-      {(decision === 'ditolak' || decision == 'kondisional') && (
+      {(decision === 'ditolak' || decision === 'kondisional') && (
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1"> 
-              {decision === 'ditolak' ? 'Alasan Penolakan' : 'Informasi Masih Diperlukan'}</label>
+          {decision === 'kondisional' && (
+            <div className="mb-3">
+              <label className="block text-sm font-medium mb-1">Jenis Tindak Lanjut</label>
+              <select
+                value={followUpType}
+                onChange={(e) => setFollowUpType(e.target.value as FollowUpType)}
+                className="w-full border rounded-lg px-3 py-2"
+              >
+                <option value="tambahan_info">Cukup Tambahan Info (surveyor lama isi catatan)</option>
+                <option value="survey_ulang">Perlu Survey Ulang Penuh (kembali ke Antrian Survey)</option>
+              </select>
+            </div>
+          )}
+          <label className="block text-sm font-medium mb-1">
+            {decision === 'ditolak' ? 'Alasan Penolakan' : 'Catatan untuk Tim Anak'}
+          </label>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full border rounded-lg px-3 py-2" rows={2} />
         </div>
       )}

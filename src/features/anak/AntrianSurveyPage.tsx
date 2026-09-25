@@ -78,6 +78,26 @@ export default function AntrianSurveyPage() {
     loadData(); // tetap di halaman ini, pindah ke bagian "Antrian Saya"
   }
 
+  async function handleSkipSurvey(applicationId: string) {
+    setClaiming(applicationId);
+    const { data: userData } = await supabase.auth.getUser();
+
+    await supabase.from('survey_assignments').insert({
+      application_id: applicationId,
+      surveyor_user_id: userData.user?.id,
+      status: 'selesai',
+      completed_at: new Date().toISOString(),
+    });
+
+    await supabase
+      .from('applications')
+      .update({ status: 'survey_selesai' })
+      .eq('id', applicationId);
+
+    setClaiming(null);
+    loadData();
+  }
+
   if (loading) return <p className="text-center mt-16">Memuat...</p>;
 
   return (
@@ -119,13 +139,22 @@ export default function AntrianSurveyPage() {
                 <p className="text-sm text-gray-600">{item.target_education_level} — {item.target_school_name}</p>
                 <p className="text-sm text-gray-500">{item.submitted_by_wilayah}, {item.submitted_by_lingkungan}</p>
               </div>
-              <button
-                onClick={() => handleClaim(item.id)}
-                disabled={claiming !== null}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap"
-              >
-                {claiming === item.id ? 'Mengambil...' : 'Ambil'}
-              </button>
+<div className="flex gap-2">
+  <button
+    onClick={() => handleClaim(item.id)}
+    disabled={claiming !== null}
+    className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap"
+  >
+    {claiming === item.id ? '...' : 'Ambil'}
+  </button>
+  <button
+    onClick={() => handleSkipSurvey(item.id)}
+    disabled={claiming !== null}
+    className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap"
+  >
+    Tidak Perlu Survey
+  </button>
+</div>
             </div>
           ))}
         </div>

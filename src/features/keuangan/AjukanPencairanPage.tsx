@@ -6,6 +6,7 @@ type Package = {
   anak_id: string;
   component_type: string;
   nominal: number;
+  payment_frequency: string;
    anak_asak: {
     name: string;
     education_level: string | null;
@@ -24,16 +25,27 @@ export default function AjukanPencairanPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [targetType, setTargetType] = useState<Record<string, 'sekolah' | 'orang_tua'>>({});
+  const [freqOverride, setFreqOverride] = useState<Record<string, string>>({});
+  const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
 
   async function loadData() {
     setLoading(true);
     const { data } = await supabase
       .from('bantuan_packages')
       .select(`
-        id, anak_id, component_type, nominal,
+        id, anak_id, component_type, nominal, payment_frequency,
         anak_asak (name, education_level, school_name, school_account_bank, school_account_number, school_account_name, parent_account_bank, parent_account_number, parent_account_name)
       `);
     setPackages(((data ?? []) as any));
+
+    // Cek paket mana yang sudah pernah diajukan (ada di disbursement_requests)
+    const { data: existingRequests } = await supabase
+       .from('disbursement_requests')
+       .select('package_id')
+       .not('package_id', 'is', null);
+    const alreadySubmitted = new Set((existingRequests ?? []).map((r) => r.package_id as string));
+    setSubmittedIds(alreadySubmitted);
+
     setLoading(false);
   }
 
@@ -45,7 +57,10 @@ export default function AjukanPencairanPage() {
     if (!pkg.anak_asak) return;
     setSubmitting(pkg.id);
     const { data: userData } = await supabase.auth.getUser();
-
+const chosenFreq = freqOverride[pkg.id] ?? pkg.payment_frequency;
+  if (chosenFreq !== pkg.payment_frequency) {
+    await supabase.from('bantuan_packages').update({ payment_frequency: chosenFreq }).eq('id', pkg.id);
+  }
     const type = targetType[pkg.id] ?? 'sekolah';
     const feeTypeMap: Record<string, string> = {
       uang_pangkal: 'uang_pangkal',
@@ -76,7 +91,7 @@ export default function AjukanPencairanPage() {
       alert('Gagal: ' + error.message);
       return;
     }
-    alert('Berhasil diajukan ke antrian pencairan.');
+    setSubmittedIds((prev) => new Set(prev).add(pkg.id));
   }
 
   if (loading) return <p className="text-center mt-16">Memuat...</p>;
@@ -93,6 +108,14 @@ export default function AjukanPencairanPage() {
               {pkg.component_type} — Rp{pkg.nominal.toLocaleString('id-ID')}
             </p>
             <div className="flex gap-2 mt-2">
+                <select
+                  value={freqOverride[pkg.id] ?? pkg.payment_frequency}
+                  onChange={(e) => setFreqOverride({ ...freqOverride, [pkg.id]: e.target.value })}
+                  className="border rounded-lg px-2 py-1.5 text-sm"
+                >
+                  <option value="bulanan">Bayar Bulanan</option>
+                  <option value="semesteran">Bayar per Semester</option>
+                </select>
               <select
                 value={targetType[pkg.id] ?? 'sekolah'}
                 onChange={(e) => setTargetType({ ...targetType, [pkg.id]: e.target.value as any })}
@@ -105,10 +128,12 @@ export default function AjukanPencairanPage() {
                 </select>
               <button
                 onClick={() => handleAjukan(pkg)}
-                disabled={submitting !== null}
-                className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm"
+                disabled={submitting !== null || submittedIds.has(pkg.id)}
+                className={`px-4 py-1.5 rounded-lg text-sm ${
+                  submittedIds.has(pkg.id) ? 'bg-gray-200 text-gray-600' : 'bg-blue-600 text-white'
+                }`}
               >
-                {submitting === pkg.id ? 'Mengajukan...' : 'Ajukan ke Antrian'}
+                {submittedIds.has(pkg.id) ? '✓ Sudah Diajukan' : submitting === pkg.id ? 'Mengajukan...' : 'Ajukan ke Antrian'}
               </button>
             </div>
           </div>
